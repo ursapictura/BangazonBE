@@ -6,7 +6,7 @@ public class Order
     public int UserId { get; set; }
     public User User { get; set; }
     public string? PaymentTypeId { get; set; }
-    public Datetime? OrderDate { get; set; }
+    public DateTime? OrderDate { get; set; }
     public bool Closed { get; set; }
     public string? Address { get; set; }
     public List<Product> Products { get; set; } = [];
@@ -23,7 +23,7 @@ public class Order
                 }
                 return total;
             }
-            return null;
+            return 0;
         }
     }
 }
