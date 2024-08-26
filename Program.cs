@@ -11,6 +11,15 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy.WithOrigins("http://localhost:3000", "http://localhost:5003")
+        .AllowAnyMethod()
+        .AllowAnyHeader();
+    });
+});
 
 AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
 
@@ -34,14 +43,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-app.Run();
-
 //Check user
-app.MapGet("/checkuser/{uid}", (BangazonBEDbContext db, string id) =>
+app.MapGet("/checkuser/{id}", (BangazonDbContext db, string id) =>
 {
-    var user = db.Users.SingleOrDefault(u => u.Id == id);
+    var user = db.Users.SingleOrDefault(u => u.FirebaseKey == id);
 
-    if (id == null)
+    if (user == null)
     {
         return Results.NotFound("User not registered");
     }
@@ -61,15 +68,15 @@ app.MapGet("/api/users/{id}", (BangazonDbContext db, int id) =>
 });
 
 //Add user
-app.MapPost("api/users/{id}", (BangazonDbContext db, User user) =>
+app.MapPost("/api/users", (BangazonDbContext db, User user) =>
 {
     db.Users.Add(user);
     db.SaveChanges();
-    return Results.Created($"api/users/{user.Id}", "user");
+    return Results.Created($"api/users/{user.Id}", user);
 });
 
 //Delete user
-app.MapDelete("api/users/{id}", (BangazonDbContext db, int id) => 
+app.MapDelete("/api/users/{id}", (BangazonDbContext db, int id) => 
 {
     User user = db.Users.SingleOrDefault(u => u.Id == id);
     if (user == null)
@@ -82,7 +89,7 @@ app.MapDelete("api/users/{id}", (BangazonDbContext db, int id) =>
 });
 
 //Update user
-app.MapPut("api/users/{id}", (BangazonDbContext db, int id, User user) =>
+app.MapPut("/api/users/{id}", (BangazonDbContext db, int id, User user) =>
 {
     User userToUpdate = db.Users.SingleOrDefault(u => u.Id == id);
     if (userToUpdate == null)
@@ -99,7 +106,7 @@ app.MapPut("api/users/{id}", (BangazonDbContext db, int id, User user) =>
 });
 
 //Get products
-app.MapGet("api/products", (BaganzonDbContext db) => 
+app.MapGet("/api/products", (BangazonDbContext db) =>
 {
     return db.Products
         .Where(p => p.Quantity > 0)
@@ -107,22 +114,22 @@ app.MapGet("api/products", (BaganzonDbContext db) =>
         .Include(p => p.Category)
         .OrderByDescending(p => p.DatePosted)
         .ToList();
-})
+});
 
 //Get 20 newest products
-app.MapGet("api/products/newest", (BangazonDbContext db) => 
+app.MapGet("/api/products/newest", (BangazonDbContext db) => 
 {
-    <List>Product newestProducts = db.Products
+    var newestProducts = db.Products
                             .Include(p => p.Category)
                             .Include(p => p.Seller)
                             .OrderByDescending(p => p.DatePosted)
                             .Take(20)
                             .ToList();
-    return Results.OK(newestProducts);
+    return Results.Ok(newestProducts);
 });
 
 //Get single product
-app.MapGet("api/products/{id}", (BangazonDbContext db, int id) => 
+app.MapGet("/api/products/{id}", (BangazonDbContext db, int id) => 
 {
     Product product = db.Products.SingleOrDefault(p => p.Id == id);
     if (product != null)
@@ -133,9 +140,9 @@ app.MapGet("api/products/{id}", (BangazonDbContext db, int id) =>
 });
 
 //Get products by category
-app.MapGet("api/products/category/{id}", (BangazonDbContext db, int id) =>
+app.MapGet("/api/products/category/{id}", (BangazonDbContext db, int id) =>
 {
-    <List>Products productsInCategory = db.Products
+    var productsInCategory = db.Products
                                 .Where(p => p.CategoryId == id)
                                 .Where(p => p.Quantity > 0)
                                 .OrderByDescending(p => p.DatePosted)
@@ -146,25 +153,25 @@ app.MapGet("api/products/category/{id}", (BangazonDbContext db, int id) =>
         return Results.Ok(productsInCategory);
     }
     
-    return Results.NoContent("No products are currently available in this category");
+    return Results.NotFound("No products are currently available in this category");
 });
 
 //Get user orders
-app.MapGet("api/orders", (BangazonDbContext db) => 
+app.MapGet("/api/orders", (BangazonDbContext db) =>
 {
-    return db.Orders.Include(p => p.Products);
-})
+    return db.Orders.Include(p => p.Products).ToList();
+});
 
 
 //Get user cart (open order)
-app.MapGet("api/cart",(BangazonDbContext db)
+app.MapGet("/api/cart", (BangazonDbContext db) =>
 {
     var openOrder = db.Orders
                     .Where(o => !o.Closed)
-                    .Include(p => p.Products)
+                    .Include(o => o.Products)
                     .ToList();
 
-    if (openOrder == null)
+    if (openOrder.Count == 0)
     {
         return Results.NotFound("No Open Orders");
     }
@@ -173,28 +180,28 @@ app.MapGet("api/cart",(BangazonDbContext db)
 });
 
 //Get order by Id
-app.MapGet("api/orders/{id}", (BangazonDbContext db, int id) =>
+app.MapGet("/api/orders/{id}", (BangazonDbContext db, int id) =>
 {
     Order order = db.Orders.SingleOrDefault(o => o.Id == id);
     if (order != null)
     {
         return Results.Ok(order);
     }
-        return Results.NotFound("Order Id not found");
+    return Results.NotFound("Order Id not found");
 
-})
+});
 
 
 //Create an order
-app.MapPost("api/orders", (BangazonDbContext db, Order order)) => 
+app.MapPost("/api/orders", (BangazonDbContext db, Order order) => 
 {
     db.Orders.Add(order);
     db.SaveChanges();
-    return Results.Ok($"api/orders/{order.id}", order);
-};
+    return Results.Created($"api/orders/{order.Id}", order);
+});
 
 //Patch to close/complete order
-app.MapPatch("api/orders/{id}", (BangazonDbContext db, int id, Order updatedOrder) => 
+app.MapPatch("/api/orders/{id}", (BangazonDbContext db, int id, Order updatedOrder) =>
 {
     var order = db.Orders.SingleOrDefault(o => o.Id == id);
 
@@ -205,12 +212,13 @@ app.MapPatch("api/orders/{id}", (BangazonDbContext db, int id, Order updatedOrde
 
     order.Closed = updatedOrder.Closed;
     order.PaymentTypeId = updatedOrder.PaymentTypeId;
+    order.OrderDate = updatedOrder.OrderDate;
     db.SaveChanges();
     return Results.Ok("Order completed");
-})
+});
 
 //Add product to order 
-app.MapPost("/orders/addProduct", (BangazonDbContext db, addProductToOrderDTO newProduct) =>
+app.MapPost("/api/orders/addProduct", (BangazonDbContext db, AddProductToOrderDTO newProduct) =>
 {
     var order = db.Orders
                 .Include(o => o.Products)  
@@ -221,7 +229,7 @@ app.MapPost("/orders/addProduct", (BangazonDbContext db, addProductToOrderDTO ne
         return Results.NotFound("Order Id not found");
     }
 
-    var product = db.Products.FirstOrDefault(newProduct.ProductId);
+    var product = db.Products.FirstOrDefault(p => p.Id == newProduct.ProductId);
 
     if (product == null)
     {
@@ -230,26 +238,31 @@ app.MapPost("/orders/addProduct", (BangazonDbContext db, addProductToOrderDTO ne
 
     order.Products.Add(product);
     db.SaveChanges();
-    return Results.Created($"/orders/addProduct", newProduct);
+    return Results.Created($"/api/orders/addProduct", newProduct);
 });
 
 //Delete product from order
-app.MapDelete("orders/deleteProduct", (BangazonDbContext db, deleteProductFromOrder removeProduct) => 
+app.MapDelete("/api/{orders}/{productId}", (BangazonDbContext db, int orderId, int productId) => 
 {
     var order = db.Orders
                 .Include(o => o.Products)
-                .SingleOrDefault(o => o.Id == removeProduct.OrderId);
+                .SingleOrDefault(o => o.Id == orderId);
     
     if (order == null)
     {
-        return Results.NotFound("Order Id not found")
+        return Results.NotFound("Order Id not found");
     }
 
-    var product = db.Products.FirstOrDefault(removeProduct.ProductId);
+    var product = db.Products.SingleOrDefault(p => p.Id == productId);
 
     if (product == null)
     {
-        return Results.NotFound("Product Id not found")
+        return Results.BadRequest("Invalid request body");
+    }
+
+    if (product == null)
+    {
+        return Results.NotFound("Product Id not found");
     }
 
     if (order.Products.Contains(product))
@@ -258,11 +271,13 @@ app.MapDelete("orders/deleteProduct", (BangazonDbContext db, deleteProductFromOr
         db.SaveChanges();
     }
 
-    return Results.Ok("$Product removed from cart");
+    return Results.Ok("Product removed from cart");
 });
 
 //Get Categories
-app.MapGet("api/categories", (BangazonDbContext db) => 
+app.MapGet("/api/categories", (BangazonDbContext db) => 
 {
     return db.Categories.ToList();
 });
+
+app.Run();
