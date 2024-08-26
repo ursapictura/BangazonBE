@@ -159,7 +159,9 @@ app.MapGet("/api/products/category/{id}", (BangazonDbContext db, int id) =>
 //Get user orders
 app.MapGet("/api/orders", (BangazonDbContext db) =>
 {
-    return db.Orders.Include(p => p.Products).ToList();
+    return db.Orders
+            .Include(o => o.Products)
+            .ToList();
 });
 
 
@@ -182,7 +184,10 @@ app.MapGet("/api/cart", (BangazonDbContext db) =>
 //Get order by Id
 app.MapGet("/api/orders/{id}", (BangazonDbContext db, int id) =>
 {
-    Order order = db.Orders.SingleOrDefault(o => o.Id == id);
+    Order order = db.Orders
+                .Include(o => o.Products)
+                .Include(o => o.PaymentType)
+                .SingleOrDefault(o => o.Id == id);
     if (order != null)
     {
         return Results.Ok(order);
@@ -229,13 +234,20 @@ app.MapPost("/api/orders/addProduct", (BangazonDbContext db, AddProductToOrderDT
         return Results.NotFound("Order Id not found");
     }
 
-    var product = db.Products.FirstOrDefault(p => p.Id == newProduct.ProductId);
+    var product = db.Products
+                .Include(p => p.Orders)
+                .SingleOrDefault(p => p.Id == newProduct.ProductId);
 
     if (product == null)
     {
         return Results.NotFound("Product Id not found");
     }
 
+    if (product.Quantity <= 0)
+    {
+        return Results.BadRequest("Product out of stock");
+    }
+    product.Quantity = product.Quantity - 1;
     order.Products.Add(product);
     db.SaveChanges();
     return Results.Created($"/api/orders/addProduct", newProduct);
@@ -268,6 +280,7 @@ app.MapDelete("/api/{orders}/{productId}", (BangazonDbContext db, int orderId, i
     if (order.Products.Contains(product))
     {
         order.Products.Remove(product);
+        product.Quantity = product.Quantity + 1;
         db.SaveChanges();
     }
 
