@@ -13,5 +13,5 @@ public class Product
     public string Image { get; set;}
     public int CategoryId { get; set;}
     public Category Category { get; set;}
-    public List<Order> Orders { get; set; }
+    public List<Order> Orders { get; set; } = new List<Order>();
 }
