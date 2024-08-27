@@ -5,7 +5,18 @@ using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.Http.HttpResults;
 
+AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
+
 var builder = WebApplication.CreateBuilder(args);
+
+// allows our api endpoints to access the database through Entity Framework Core
+builder.Services.AddNpgsql<BangazonDbContext>(builder.Configuration["BangazonDbConnectionString"]);
+
+// Set the JSON serializer options
+builder.Services.Configure<JsonOptions>(options =>
+{
+    options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
+});
 
 // Add services to the container.
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -21,18 +32,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
-
-// allows our api endpoints to access the database through Entity Framework Core
-builder.Services.AddNpgsql<BangazonDbContext>(builder.Configuration["BangazonDbConnectionString"]);
-
-// Set the JSON serializer options
-builder.Services.Configure<JsonOptions>(options =>
-{
-    options.SerializerOptions.ReferenceHandler = ReferenceHandler.IgnoreCycles;
-});
-
 var app = builder.Build();
+app.UseCors();
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -44,9 +45,9 @@ if (app.Environment.IsDevelopment())
 app.UseHttpsRedirection();
 
 //Check user
-app.MapGet("/checkuser/{id}", (BangazonDbContext db, string id) =>
+app.MapGet("/checkuser/{uid}", (BangazonDbContext db, string uid) =>
 {
-    var user = db.Users.SingleOrDefault(u => u.FirebaseKey == id);
+    var user = db.Users.Where(u => u.FirebaseKey == uid).ToList();
 
     if (user == null)
     {
@@ -68,11 +69,18 @@ app.MapGet("/api/users/{id}", (BangazonDbContext db, int id) =>
 });
 
 //Add user
-app.MapPost("/api/users", (BangazonDbContext db, User user) =>
+app.MapPost("/api/register", (BangazonDbContext db, User user) =>
 {
-    db.Users.Add(user);
-    db.SaveChanges();
-    return Results.Created($"api/users/{user.Id}", user);
+    try
+    {
+        db.Users.Add(user);
+        db.SaveChanges();
+        return Results.Created($"/users/{user.Id}", user);
+    }
+    catch (DbUpdateException)
+    {
+        return Results.BadRequest("Unable to register user");
+    }
 });
 
 //Delete user
