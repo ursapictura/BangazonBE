@@ -27,6 +27,7 @@ builder.Services.AddCors(options =>
     options.AddDefaultPolicy(policy =>
     {
         policy.WithOrigins("http://localhost:3000", "http://localhost:5003")
+        .AllowAnyOrigin()
         .AllowAnyMethod()
         .AllowAnyHeader();
     });
@@ -49,9 +50,9 @@ app.MapGet("/checkuser/{uid}", (BangazonDbContext db, string uid) =>
 {
     var user = db.Users.Where(u => u.FirebaseKey == uid).ToList();
 
-    if (user == null)
+    if (uid == null)
     {
-        return Results.NotFound("User not registered");
+        return Results.NotFound();
     }
 
     return Results.Ok(user);
@@ -164,29 +165,49 @@ app.MapGet("/api/products/category/{id}", (BangazonDbContext db, int id) =>
     return Results.NotFound("No products are currently available in this category");
 });
 
+// Get seller products
+app.MapGet("/api/products/users/{userId}", (BangazonDbContext db, int userId) =>
+{
+var sellerProducts = db.Products
+                        .Include(p => p.Category)
+                        .Include(p => p.Seller)
+                        .OrderByDescending(p => p.DatePosted)
+                        .Where(p => p.SellerId ==  userId)
+                        .ToList();
+return Results.Ok(sellerProducts);
+});
+
 //Get user orders
-app.MapGet("/api/orders", (BangazonDbContext db) =>
+app.MapGet("/api/{id}/orders", (BangazonDbContext db, int id) =>
 {
     return db.Orders
             .Include(o => o.Products)
+            .Where(o => o.BuyerId == id && o.Closed)
+            .OrderByDescending(o => o.OrderDate)
             .ToList();
 });
 
 
 //Get user cart (open order)
-app.MapGet("/api/cart", (BangazonDbContext db) =>
+app.MapGet("/api/cart/{userId}", (BangazonDbContext db, int userId) =>
 {
-    var openOrder = db.Orders
-                    .Where(o => !o.Closed)
+    var cart = db.Orders
+                    .Where(o => o.BuyerId == userId && !o.Closed)
                     .Include(o => o.Products)
+                    .ThenInclude(p => p.Seller)
                     .ToList();
 
-    if (openOrder.Count == 0)
+    if (cart.Count == 0)
     {
-        return Results.NotFound("No Open Orders");
+        Order newCart = new Order();
+        newCart.BuyerId = userId;
+        newCart.Closed = false;
+        db.Orders.Add(newCart);
+        db.SaveChanges();
+        return Results.Ok(newCart);
     }
     
-    return Results.Ok(openOrder);
+    return Results.Ok(cart);
 });
 
 //Get order by Id
@@ -262,7 +283,7 @@ app.MapPost("/api/orders/addProduct", (BangazonDbContext db, AddProductToOrderDT
 });
 
 //Delete product from order
-app.MapDelete("/api/{orders}/{productId}", (BangazonDbContext db, int orderId, int productId) => 
+app.MapDelete("/api/{orderId}/{productId}", (BangazonDbContext db, int orderId, int productId) => 
 {
     var order = db.Orders
                 .Include(o => o.Products)
