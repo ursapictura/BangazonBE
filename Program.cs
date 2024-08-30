@@ -48,7 +48,7 @@ app.UseHttpsRedirection();
 //Check user
 app.MapGet("/checkuser/{uid}", (BangazonDbContext db, string uid) =>
 {
-    var user = db.Users.Where(u => u.FirebaseKey == uid).ToList();
+    var user = db.Users.Where(u => u.Uid == uid).ToList();
 
     if (uid == null)
     {
@@ -105,7 +105,7 @@ app.MapPut("/api/users/{id}", (BangazonDbContext db, int id, User user) =>
     {
         return Results.NotFound("User Id not found");
     }
-    userToUpdate.FirebaseKey = user.FirebaseKey;
+    userToUpdate.Uid = user.Uid;
     userToUpdate.FirstName = user.FirstName;
     userToUpdate.LastName = user.LastName;
     userToUpdate.Email = user.Email;
