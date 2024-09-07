@@ -140,7 +140,9 @@ app.MapGet("/api/products/newest", (BangazonDbContext db) =>
 //Get single product
 app.MapGet("/api/products/{id}", (BangazonDbContext db, int id) => 
 {
-    Product product = db.Products.SingleOrDefault(p => p.Id == id);
+    Product product = db.Products
+                       .Include(p => p.Seller)
+                       .SingleOrDefault(p => p.Id == id);
     if (product != null)
     {
         return Results.Ok(product);
@@ -320,6 +322,12 @@ app.MapDelete("/api/{orderId}/{productId}", (BangazonDbContext db, int orderId, 
 app.MapGet("/api/categories", (BangazonDbContext db) => 
 {
     return db.Categories.ToList();
+});
+
+// Get Payment Types
+app.MapGet("/api/paymentTypes", (BangazonDbContext db) =>
+{
+    return db.PaymentTypes.ToList();
 });
 
 app.Run();
